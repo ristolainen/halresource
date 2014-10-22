@@ -50,6 +50,17 @@
       (add-properties resource {:size 200 :height 12})
       => (contains {:properties {:size 200 :height 12}}))
 
+(fact "add-curie adds a link to the resource"
+      (add-curie resource :href "http://example.org/doc" :name "doc")
+      => (contains {:curies [{:href "http://example.org/doc" :name "doc"}]})
+
+      (-> resource
+          (add-curie :href "http://example.org/doc1" :name "doc1")
+          (add-curie :href "http://example.org/doc2" :name "doc2")
+          :curies)
+      => [{:href "http://example.org/doc1" :name "doc1"}
+          {:href "http://example.org/doc2" :name "doc2"}])
+
 (facts "about resource->representation"
        (fact "it transforms a simple resource into JSON"
              (json/parse-string (resource->representation resource :json))
@@ -118,6 +129,15 @@
                (:content xml-rep)
                => (just [{:tag :size :attrs {} :content ["200"]}
                          {:tag :height :attrs {} :content ["12"]}] :in-any-order)))
+
+       (fact "it transforms a resource with curies into JSON"
+             (let [resource (-> resource
+                                (add-curie :href "http://example.org/doc1" :name "doc1")
+                                (add-curie :href "http://example.org/doc2" :name "doc2"))]
+               (json/parse-string (resource->representation resource :json))
+               => {"_links" {"self" {"href" "http://example.org"}
+                             "curies" [{"name" "doc1" "href" "http://example.org/doc1"}
+                                       {"name" "doc2" "href" "http://example.org/doc2"}]}}))
 
        (fact "it transforms a resource with nested properties into XML"
              (let [resource (-> resource

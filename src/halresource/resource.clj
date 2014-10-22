@@ -3,13 +3,13 @@
             [cheshire.core :as json]
             [clojure.data.xml :as xml]))
 
-(defrecord Resource [href links embedded properties])
+(defrecord Resource [href links embedded properties curies])
 
 (defn new-resource
   "Create a new empty resource, given a href for the resource."
   
   [href]
-  (->Resource href [] [] {}))
+  (->Resource href [] [] {} []))
 
 (defn add-link
   "Add a link to the resource. Arguments are named parameters and
@@ -51,6 +51,19 @@
   [resource properties]
   (update-in resource [:properties] #((fnil merge {}) % properties)))
 
+(defn add-curie
+  "Add a curie to the resource. Arguments are named parameters and should
+   include the following:
+
+   * :name
+   * :href
+
+   Any other parameters will be attributes on the curie."
+
+  [resource & args]
+  (let [link (apply hash-map args)]
+    (update-in resource [:curies] #((fnil conj []) % link))))
+
 (declare json-representation xml-representation)
 
 (defmulti resource->representation
@@ -70,7 +83,8 @@
       xml/emit-str))
 
 (defn json-representation [resource]
-  (let [links (into {"self" {"href" (:href resource)}}
+  (let [curies (map #(into {} (for [[k v] %] [(name k) v])) (:curies resource))
+        links (into {"self" {"href" (:href resource)}}
                     (for [[k link] (group-by :rel (:links resource))]
                       (letfn [(remove-rel [l] (dissoc l :rel))]
                         [k (if (= 1 (count link)) (remove-rel (first link)) (map remove-rel link))])))
@@ -81,7 +95,9 @@
                                     resources)])
                             (group-by first (:embedded resource))))
         representation (merge (:properties resource)
-                              {:_links links})
+                              {:_links (if (empty? curies) 
+                                         links
+                                         (assoc links "curies" curies))})
         representation (if (empty? embedded)
                          representation
                          (merge representation {:_embedded embedded}))]
